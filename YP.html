@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>電桿代號 ➜ Google Maps</title>
+  <style>
+    /* 省略與之前類似的樣式，重點在彈出框 */
+
+    html, body {
+      height: 100%;
+      margin: 0; padding: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+      background: #f8f9fa;
+      display: flex;
+      flex-direction: column;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    body {
+      padding: 1em;
+    }
+    h2 {
+      margin-top: 0;
+    }
+    input {
+      font-size: 1.2em;
+      padding: 0.6em;
+      margin-bottom: 0.3em;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    #result {
+      font-size: 1.1em;
+      color: #333;
+      white-space: pre-wrap;
+      min-height: 3em;
+      margin-bottom: 0.3em;
+    }
+    /* 鍵盤相關 */
+    #keyboard {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5em;
+      flex-grow: 1;
+      max-height: calc(100vh - 260px);
+      overflow-y: auto;
+      margin-bottom: 1em;
+      padding-bottom: 60px;
+      box-sizing: border-box;
+    }
+    .keyboard-keys {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5em;
+    }
+    .keyboard-row {
+      display: flex;
+      gap: 0.5em;
+      justify-content: space-between;
+    }
+    #keyboard button {
+      flex: 1;
+      padding: 1em 0;
+      font-size: 1.1em;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: #fff;
+      cursor: pointer;
+      text-align: center;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #keyboard button:hover {
+      background: #e0e0e0;
+    }
+    #keyboard-controls {
+      display: flex;
+      gap: 0.5em;
+      margin-top: 0.5em;
+      position: relative;
+      z-index: 10;
+    }
+    #keyboard-controls button {
+      flex: 1;
+      padding: 1em 0;
+      font-weight: bold;
+      background: #f0f0f0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.2s;
+    }
+    #keyboard-controls button:hover {
+      background: #ddd;
+    }
+    /* 底部轉換按鈕 */
+    #bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      background: #f8f9fa;
+      padding: 0.5em 1em 1em;
+      box-sizing: border-box;
+      border-top: 1px solid #ccc;
+      z-index: 9999;
+      display: flex;
+      gap: 0.5em;
+      flex-wrap: wrap;
+    }
+    #convertBtn {
+      flex: 1 1 60%;
+      background: #004080; /* 預設暗藍較淡（禁用） */
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: not-allowed;
+      font-size: 1.2em;
+      padding: 0.8em 0;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.3s;
+    }
+    #convertBtn:hover:enabled {
+      background: #003366; /* 啟用時更深暗藍 */
+    }
+    #historyBtn {
+      flex: 1 1 35%;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1.2em;
+      padding: 0.8em 0;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.3s;
+    }
+    #historyBtn:hover {
+      background: #1e7e34;
+    }
+
+    /* 彈出框遮罩 */
+    #historyModal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    }
+    #historyContent {
+      background: white;
+      max-width: 90vw;
+      max-height: 70vh;
+      overflow-y: auto;
+      border-radius: 10px;
+      padding: 1em;
+      box-sizing: border-box;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    #historyContent h3 {
+      margin-top: 0;
+      margin-bottom: 1em;
+      text-align: center;
+    }
+    #historyList {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    #historyList li {
+      padding: 0.5em 0.7em;
+      border-bottom: 1px solid #ddd;
+      cursor: pointer;
+      font-size: 1.1em;
+      user-select: none;
+    }
+    #historyList li:hover {
+      background: #f0f0f0;
+    }
+    #historyCloseBtn {
+      margin-top: 1em;
+      width: 100%;
+      padding: 0.7em;
+      font-size: 1.1em;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.3s;
+    }
+    #historyCloseBtn:hover {
+      background: #b02a37;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>電桿代號 ➜ Google Maps</h2>
+
+  <input id="poleInput" type="text" placeholder="請輸入電桿代號，如 Q4066AB53" readonly />
+  <div id="result"></div>
+
+  <div id="keyboard">
+    <div class="keyboard-keys" id="keyboard-keys"></div>
+    <div id="keyboard-controls">
+      <button id="backspaceBtn">←</button>
+      <button id="clearBtn">清除</button>
+    </div>
+  </div>
+
+  <div id="bottom-bar">
+    <button id="convertBtn" disabled>轉換並開啟 Google Maps</button>
+    <button id="historyBtn">歷史紀錄</button>
+  </div>
+
+  <!-- 歷史紀錄彈出框 -->
+  <div id="historyModal" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+    <div id="historyContent">
+      <h3 id="historyTitle">歷史轉換紀錄</h3>
+      <ul id="historyList"></ul>
+      <button id="historyCloseBtn">關閉</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+  <script>
+    proj4.defs("EPSG:3828",
+      "+proj=tmerc +lat_0=0 +lon_0=121 +k=0.9999 +x_0=250000 +y_0=0 +ellps=GRS67 " +
+      "+towgs84=-752,-358,-179,-0.0000011698,0.0000018398,0.0000009822,0.00002329 +units=m +no_defs"
+    );
+
+    const idxLat = [
+      2750000,2750000,2750000,2700000,2700000,2700000,2650000,2650000,2650000,
+      2600000,2600000,2600000,2550000,2550000,2550000,2500000,2500000,2500000,
+      2894000,2450000,2450000,2400000,2400000,2614000,2564000,2675800
+    ];
+    const idxLon = [
+      170000,250000,330000,170000,250000,330000,170000,250000,330000,
+      90000,170000,250000,90000,170000,250000,90000,170000,250000,
+      10000,170000,250000,170000,250000,275000,275000,10000
+    ];
+    const alphabet = Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+
+    function highlightError(code, badRange) {
+      const s = code.trim().toUpperCase();
+      let result = "";
+      for (let i = 0; i < s.length; i++) {
+        if (i >= badRange[0] && i <= badRange[1]) {
+          result += `<span class="bad">${s[i] || ""}</span>`;
+        } else {
+          result += s[i] || "";
+        }
+      }
+      return result;
+    }
+
+    function parsePoleToTWD67(code) {
+      const s = code.trim().toUpperCase();
+      if (![9, 11].includes(s.length)) {
+        return {
+          error: "⚠️ 長度錯誤：請輸入 9 碼（如 Q4066AB53）或 11 碼（如 Q4066AB5312）",
+          highlight: highlightError(s, [0, s.length - 1])
+        };
+      }
+      const full = s.length === 9 ? s + "00" : s;
+      const match = full.match(/^([A-Z])(\d{2})(\d{2})([A-H])([A-E])(\d)(\d)(\d)(\d)$/);
+      if (!match) {
+        return {
+          error: "⚠️ 格式錯誤，請檢查代號內容",
+          highlight: highlightError(s, [0, s.length - 1])
+        };
+      }
+      const [, z, xC, yC, xb, yb, x10, y10, x1, y1] = match;
+      const zi = alphabet.indexOf(z);
+      if (zi < 0) {
+        return {
+          error: `⚠️ 圖幅代號錯誤：無法識別 "${z}"`,
+          highlight: highlightError(s, [0, 0])
+        };
+      }
+      const baseX = idxLon[zi], baseY = idxLat[zi];
+      const x = baseX + (+xC) * 800 + (xb.charCodeAt(0) - 65) * 100 + (+x10) * 10 + (+x1);
+      const y = baseY + (+yC) * 500 + (yb.charCodeAt(0) - 65) * 100 + (+y10) * 10 + (+y1);
+      return { x, y };
+    }
+
+    // -------------- 歷史紀錄相關 ----------------
+    function getHistory() {
+      return JSON.parse(localStorage.getItem("polecode_history") || "[]");
+    }
+    function saveHistory(arr) {
+      localStorage.setItem("polecode_history", JSON.stringify(arr));
+    }
+    function addToHistory(code) {
+      if (!code) return;
+      let history = getHistory();
+      if (history.includes(code)) {
+        history = history.filter(item => item !== code);
+      }
+      history.unshift(code);
+      if (history.length > 20) history.pop();
+      saveHistory(history);
+    }
+    function openHistoryModal() {
+      const modal = document.getElementById("historyModal");
+      const list = document.getElementById("historyList");
+      list.innerHTML = "";
+      const history = getHistory();
+      if (history.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "尚無轉換紀錄";
+        li.style.color = "#666";
+        li.style.cursor = "default";
+        list.appendChild(li);
+      } else {
+        history.forEach(code => {
+          const li = document.createElement("li");
+          li.textContent = code;
+          li.onclick = () => {
+            const inputBox = document.getElementById("poleInput");
+            inputBox.value = code;
+            createKeyboard(code.length);
+            clearResult();
+            modal.style.display = "none";
+            checkConvertButton();
+          };
+          list.appendChild(li);
+        });
+      }
+      modal.style.display = "flex";
+    }
+    function closeHistoryModal() {
+      document.getElementById("historyModal").style.display = "none";
+    }
+
+    function clearResult() {
+      document.getElementById("result").textContent = "";
+    }
+
+    function convertAndOpen() {
+      const input = document.getElementById("poleInput").value;
+      const resultDiv = document.getElementById("result");
+      const parsed = parsePoleToTWD67(input);
+      if (parsed.error) {
+        resultDiv.innerHTML = parsed.error + "<br>" + parsed.highlight;
+        return;
+      }
+      const { x, y } = parsed;
+      const [lon, lat] = proj4("EPSG:3828", "EPSG:4326", [x, y]);
+      resultDiv.textContent =
+        `👉 TWD67：${x.toFixed(2)}, ${y.toFixed(2)}\n` +
+        `👉 WGS84：${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+      addToHistory(input);
+      window.open(`https://www.google.com/maps?q=${lat},${lon}`, "_blank");
+    }
+
+    function createKeyboard(position) {
+      const keysContainer = document.getElementById("keyboard-keys");
+      keysContainer.innerHTML = "";
+
+      let keys = [];
+
+      if (position === 0) {
+        keys = [["Q", "T", "L", "N"]];
+      } else if (position >= 1 && position <= 4) {
+        keys = [
+          ["7", "8", "9"],
+          ["4", "5", "6"],
+          ["1", "2", "3"],
+          ["0"]
+        ];
+      } else if (position === 5 ) {
+        keys = [
+          ["A", "B", "C", "D"],
+          ["E", "F", "G", "H"]
+        ];
+      } else if ( position === 6) {
+        keys = [
+          ["A", "B", "C", "D"],
+          ["E","","",""]
+        ];
+      } else if (position >= 7 && position <= 10) {
+        keys = [
+          ["7", "8", "9"],
+          ["4", "5", "6"],
+          ["1", "2", "3"],
+          ["0"]
+        ];
+      }
+
+      keys.forEach(row => {
+        const rowDiv = document.createElement("div");
+        rowDiv.className = "keyboard-row";
+
+        row.forEach(k => {
+          const btn = document.createElement("button");
+          btn.textContent = k;
+          btn.onclick = () => {
+            const inputBox = document.getElementById("poleInput");
+            if (inputBox.value.length >= 11) return; // 最多11碼
+            inputBox.value += k;
+            createKeyboard(inputBox.value.length);
+            inputBox.focus();
+            clearResult();
+            checkConvertButton();
+          };
+          rowDiv.appendChild(btn);
+        });
+
+        keysContainer.appendChild(rowDiv);
+      });
+    }
+
+    function checkConvertButton() {
+      const inputBox = document.getElementById("poleInput");
+      const convertBtn = document.getElementById("convertBtn");
+      if (inputBox.value.length === 9 || inputBox.value.length === 11) {
+        convertBtn.disabled = false;
+        convertBtn.style.backgroundColor = "#0e87ff"; // 啟用更深暗藍色
+        convertBtn.style.cursor = "pointer";
+      } else {
+        convertBtn.disabled = true;
+        convertBtn.style.backgroundColor = "#001933"; // 停用暗藍色
+        convertBtn.style.cursor = "not-allowed";
+      }
+    }
+
+    window.onload = () => {
+      const inputBox = document.getElementById("poleInput");
+      const backspaceBtn = document.getElementById("backspaceBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const convertBtn = document.getElementById("convertBtn");
+      const historyBtn = document.getElementById("historyBtn");
+
+      inputBox.readOnly = true;
+
+      // 頁面一開始就輸入Q，並切換鍵盤到位置1（數字鍵盤）
+      inputBox.value = "Q";
+      createKeyboard(1);
+      clearResult();
+      inputBox.focus();
+
+      backspaceBtn.onclick = () => {
+        inputBox.value = inputBox.value.slice(0, -1);
+        createKeyboard(inputBox.value.length);
+        clearResult();
+        inputBox.focus();
+        checkConvertButton();
+      };
+      clearBtn.onclick = () => {
+        inputBox.value = "";
+        createKeyboard(0);
+        clearResult();
+        inputBox.focus();
+        checkConvertButton();
+      };
+      convertBtn.onclick = () => {
+        convertAndOpen();
+      };
+      historyBtn.onclick = () => {
+        openHistoryModal();
+      };
+      document.getElementById("historyCloseBtn").onclick = () => {
+        closeHistoryModal();
+      };
+
+      // 點遮罩空白區關閉彈窗
+      document.getElementById("historyModal").addEventListener("click", e => {
+        if (e.target === e.currentTarget) closeHistoryModal();
+      });
+
+      checkConvertButton();  // 初始化轉換按鈕狀態
+    };
+  </script>
+
+</body>
+</html>
